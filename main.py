@@ -1,7 +1,16 @@
 def get_data(filename):
+    size = 0
+    minterms = []
+    dontcares = []
+    status = 0
     with open(filename, 'r') as f:
-        data = list(map(int, f.readline().split()))
-        return data
+        for line in f.readlines():
+            if line[0] == '!': status+=1
+            elif status == 0: size = int(line)
+            elif status == 1: minterms.append(int(line))
+            else: dontcares.append(int(line))
+
+    return size, minterms, dontcares
 
 def draw_line():
     print("===============================")
@@ -10,77 +19,119 @@ def to_binarr(minterm, size):
     binarr = []
     for i in range(size):
         binarr = [minterm>>i&1] + binarr
+
     return binarr
 
 def get_ones(minterm, size):
     ones = 0
     for i in range(size):
         ones += minterm>>i&1
+
     return ones
 
-def make_table(minterms, size):
-    table = []
-    for minterm in minterms:
-        row = [
-            get_ones(minterm, size), # number of 1s
-            [minterm], # merged minterms
-            to_binarr(minterm, size), # binarr, - is 2
-            False # combined
-        ]
-        table.append(row)
-    return table
+class implicant:
+    def __init__(self, ones, minterms, binarr, combined):
+        self.ones = ones
+        self.minterms = minterms
+        self.binarr = binarr
+        self.combined = combined
 
-def merge_rows(row1, row2):
-    row1[3] = True
-    row2[3] = True
+def make_table(minterms, dontcares, size):
     return [
-        min(row1[0], row2[0]),
-        row1[1]+row2[1],
-        [2 if row1[2][i]!=row2[2][i] else row1[2][i] for i in range(len(row1[2]))],
-        False
-        ]
+        implicant(get_ones(minterm, size), [minterm], to_binarr(minterm, size), False)
+        for minterm in minterms+dontcares
+    ]
 
-def hamming_distance(binarr1, binarr2):
+def merge_imps(imp1, imp2):
+    imp1.combined = True
+    imp2.combined = True
+
+    return implicant(
+        min(imp1.ones, imp2.ones),
+        imp1.minterms + imp2.minterms,
+        [2 if imp1.binarr[i]!=imp2.binarr[i] else imp1.binarr[i] for i in range(len(imp1.binarr))],
+        False
+    )
+
+def hamming_distance(imp1, imp2):
     dist = 0
-    for i in range(len(binarr1)): dist += 1 if binarr1[i] != binarr2[i] else 0
+    for i in range(len(imp1.binarr)): dist += 1 if imp1.binarr[i] != imp2.binarr[i] else 0
+
     return dist
 
 def trinory(binarr):
     res = 0
     for i in range(len(binarr)):
         res += binarr[-i-1] * (3**i)
+
     return res
 
-def get_PIs(table):
+def make_PIs(table):
     if len(table) <= 1: return table
     newTable = []
     newTableChecked = set()
     table_ones = []
-    for row in table:
-        if len(table_ones) <= row[0]: table_ones.append([row])
-        else: table_ones[row[0]].append(row)
+
+    for imp in table:
+        if len(table_ones) <= imp.ones: table_ones.append([imp])
+        else: table_ones[imp.ones].append(imp)
+
     for i in range(len(table_ones)-1):
-        for row1 in table_ones[i]:
-            for row2 in table_ones[i+1]:
-                if hamming_distance(row1[2], row2[2]) == 1:
-                    merged = merge_rows(row1, row2)
-                    tri = trinory(merged[2])
+        for imp1 in table_ones[i]:
+            for imp2 in table_ones[i+1]:
+                if hamming_distance(imp1, imp2) == 1:
+                    merged = merge_imps(imp1, imp2)
+                    tri = trinory(merged.binarr)
                     if tri not in newTableChecked:
                         newTable.append(merged)
                         newTableChecked.add(tri)
+
     res = []
-    for row in table:
-        if not row[3]: res.append(row)
-    return res + get_PIs(newTable) 
+    for imp in table:
+        if not imp.combined: res.append(imp)
+
+    return res + make_PIs(newTable) 
+
+def find_EPIs(table, minterms, dontcares):
+    minterm_count = {}
+    EPIs = []
+    EPIsCheck = set()
+
+    for minterm in minterms:
+        minterm_count[minterm] = 0
+
+    for imp in table:
+        for minterm in imp.minterms:
+            if minterm in minterms:
+                minterm_count[minterm] += 1
+
+    for minterm in minterm_count:
+        if minterm_count[minterm] == 1:
+            for imp in table:
+                if minterm in imp.minterms:
+                    tri = trinory(imp.binarr)
+                    if tri not in EPIsCheck:
+                        EPIs.append(imp)
+                        EPIsCheck.add(tri)
+                    break
+    
+    return EPIs
 
 if __name__ == '__main__':
-    # step 1: read minterm data from file
-    data = get_data('input.txt')
-    size = data[0]
-    minterms = data[1:]
+    size, minterms, dontcares = get_data('input.txt')
+    draw_line()
+    print('step 0. 값 읽어오기')
     print(f'size : {size}')
     print(f'minterms : {minterms}')
-    draw_line()
+    print(f'dontcares : {dontcares}')
 
-    table = make_table(minterms, size)
-    print(list(map(lambda row: row[1], get_PIs(table))))
+    table = make_table(minterms, dontcares, size)
+    table_PI = make_PIs(table)
+    draw_line()
+    print('step 1. PI 리스트 찾기')
+    print(list(map(lambda imp: imp.minterms, table_PI)))
+
+    EPIs = find_EPIs(table_PI, minterms, dontcares)
+    draw_line()
+    print('step 2. EPI 리스트 찾기')
+    print(list(map(lambda imp: imp.minterms, EPIs)))
