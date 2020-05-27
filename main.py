@@ -36,6 +36,9 @@ class implicant:
         self.binarr = binarr
         self.combined = combined
 
+    def __str__(self):
+        return f'{self.ones} \t {self.minterms} \t {list(map(lambda x: -1 if x==2 else x, self.binarr))}'
+
 def make_table(minterms, dontcares, size):
     return [
         implicant(get_ones(minterm, size), [minterm], to_binarr(minterm, size), False)
@@ -130,6 +133,9 @@ if __name__ == '__main__':
     draw_line()
     print('step 1. PI 리스트 찾기')
     print(list(map(lambda imp: imp.minterms, table_PI)))
+    print('step 1. PI 테이블')
+    print('# of 1s', 'minterms', 'binary', sep='\t')
+    print(*table_PI, sep='\n')
 
     EPIs = find_EPIs(table_PI, minterms, dontcares)
     draw_line()
