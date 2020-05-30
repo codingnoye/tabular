@@ -35,9 +35,7 @@ class implicant:
         self.minterms = minterms
         self.binarr = binarr
         self.combined = combined
-
-    def __str__(self):
-        return f'{self.ones} \t {self.minterms} \t {list(map(lambda x: -1 if x==2 else x, self.binarr))}'
+        self.name = ''
 
 def make_table(minterms, dontcares, size):
     return [
@@ -91,9 +89,32 @@ def make_PIs(table):
 
     res = []
     for imp in table:
-        if not imp.combined: res.append(imp)
+        if not imp.combined:
+            res.append(imp)
 
     return res + make_PIs(newTable) 
+
+def binarr_str(binarr):
+    res = ''
+    for i in binarr:
+        res += f'{i if i!=2 else "-"}, '
+    return res[:-2]
+
+def draw_PIs(table, minterms, dontcares):
+    th = '%-27s' % 'Prime Implecants'
+    terms = minterms + dontcares
+    for minterm in minterms:
+        th += '| %-4s ' % minterm
+    for dontcare in dontcares:
+        th += '| %-4s ' % f'({dontcare})'
+    print(th)
+    
+    for imp in table:
+        tr = '%-27s' % f'{imp.name} = {binarr_str(imp.binarr)}'
+        for term in terms:
+            tr += '| %-4s ' % ('V' if term in imp.minterms else ' ')
+        print(tr)
+
 
 def find_EPIs(table, minterms, dontcares):
     minterm_count = {}
@@ -120,6 +141,9 @@ def find_EPIs(table, minterms, dontcares):
     
     return EPIs
 
+def find_min_cover(table, minterms, dontcares):
+    pass
+
 if __name__ == '__main__':
     size, minterms, dontcares = get_data('input.txt')
     draw_line()
@@ -130,14 +154,23 @@ if __name__ == '__main__':
 
     table = make_table(minterms, dontcares, size)
     table_PI = make_PIs(table)
+
+    i = 1
+    for imp in table_PI:
+        imp.name = 'P'+str(i)
+        i += 1
+
     draw_line()
     print('step 1. PI 리스트 찾기')
     print(list(map(lambda imp: imp.minterms, table_PI)))
-    print('step 1. PI 테이블')
-    print('# of 1s', 'minterms', 'binary', sep='\t')
-    print(*table_PI, sep='\n')
+    draw_line()
+    print('step 1-1. PI 테이블')
+    draw_PIs(table_PI, minterms, dontcares)
 
     EPIs = find_EPIs(table_PI, minterms, dontcares)
     draw_line()
     print('step 2. EPI 리스트 찾기')
     print(list(map(lambda imp: imp.minterms, EPIs)))
+    draw_line()
+    print('step 2-1. EPI가 제거된 PI 테이블')
+    draw_PIs(filter(lambda imp:imp not in EPIs, table_PI), minterms, dontcares)
