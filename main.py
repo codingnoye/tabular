@@ -10,7 +10,7 @@ def get_data(filename):
             elif status == 1: minterms.append(int(line))
             else: dontcares.append(int(line))
 
-    return size, minterms, dontcares
+    return size, set(minterms), set(dontcares)
 
 def draw_line():
     print("===============================")
@@ -39,8 +39,8 @@ class implicant:
 
 def make_table(minterms, dontcares, size):
     return [
-        implicant(get_ones(minterm, size), [minterm], to_binarr(minterm, size), False)
-        for minterm in minterms+dontcares
+        implicant(get_ones(minterm, size), {minterm}, to_binarr(minterm, size), False)
+        for minterm in minterms | dontcares
     ]
 
 def merge_imps(imp1, imp2):
@@ -49,7 +49,7 @@ def merge_imps(imp1, imp2):
 
     return implicant(
         min(imp1.ones, imp2.ones),
-        imp1.minterms + imp2.minterms,
+        imp1.minterms | imp2.minterms,
         [2 if imp1.binarr[i]!=imp2.binarr[i] else imp1.binarr[i] for i in range(len(imp1.binarr))],
         False
     )
@@ -60,7 +60,7 @@ def hamming_distance(imp1, imp2):
 
     return dist
 
-def trinory(binarr):
+def trinary(binarr):
     res = 0
     for i in range(len(binarr)):
         res += binarr[-i-1] * (3**i)
@@ -82,7 +82,7 @@ def make_PIs(table):
             for imp2 in table_ones[i+1]:
                 if hamming_distance(imp1, imp2) == 1:
                     merged = merge_imps(imp1, imp2)
-                    tri = trinory(merged.binarr)
+                    tri = trinary(merged.binarr)
                     if tri not in newTableChecked:
                         newTable.append(merged)
                         newTableChecked.add(tri)
@@ -100,9 +100,9 @@ def binarr_str(binarr):
         res += f'{i if i!=2 else "-"}, '
     return res[:-2]
 
-def draw_PIs(table, minterms, dontcares):
+def draw_PIs(table, minterms, dontcares = set()):
     th = '%-27s' % 'Prime Implecants'
-    terms = minterms + dontcares
+    terms = minterms | dontcares
     for minterm in minterms:
         th += '| %-4s ' % minterm
     for dontcare in dontcares:
@@ -116,7 +116,7 @@ def draw_PIs(table, minterms, dontcares):
         print(tr)
 
 
-def find_EPIs(table, minterms, dontcares):
+def find_EPIs(table, minterms, dontcares = set()):
     minterm_count = {}
     EPIs = []
     EPIsCheck = set()
@@ -133,7 +133,7 @@ def find_EPIs(table, minterms, dontcares):
         if minterm_count[minterm] == 1:
             for imp in table:
                 if minterm in imp.minterms:
-                    tri = trinory(imp.binarr)
+                    tri = trinary(imp.binarr)
                     if tri not in EPIsCheck:
                         EPIs.append(imp)
                         EPIsCheck.add(tri)
@@ -141,7 +141,7 @@ def find_EPIs(table, minterms, dontcares):
     
     return EPIs
 
-def find_min_cover(table, minterms, dontcares):
+def find_mincover(table, minterms, dontcares = set()):
     pass
 
 if __name__ == '__main__':
@@ -173,4 +173,10 @@ if __name__ == '__main__':
     print(list(map(lambda imp: imp.minterms, EPIs)))
     draw_line()
     print('step 2-1. EPI가 제거된 PI 테이블')
-    draw_PIs(filter(lambda imp:imp not in EPIs, table_PI), minterms, dontcares)
+    minterms_of_EPIs = set()
+    for EPI in EPIs:
+        minterms_of_EPIs.update(EPI.minterms)
+    table = list(filter(lambda imp:imp not in EPIs, table_PI))
+    minterms = set(filter(lambda m: m not in minterms_of_EPIs, minterms))
+    draw_PIs(table, minterms)
+
