@@ -35,6 +35,7 @@ class implicant:
         self.minterms = minterms
         self.binarr = binarr
         self.combined = combined
+        self.temp_minterms = set()
         self.name = ''
 
 def make_table(minterms, dontcares, size):
@@ -71,12 +72,9 @@ def make_PIs(table):
     if len(table) <= 1: return table
     newTable = []
     newTableChecked = set()
-    table_ones = []
-
+    table_ones = [[] for i in range(len(table[0].binarr)+1)]
     for imp in table:
-        if len(table_ones) <= imp.ones: table_ones.append([imp])
-        else: table_ones[imp.ones].append(imp)
-
+        table_ones[imp.ones].append(imp)
     for i in range(len(table_ones)-1):
         for imp1 in table_ones[i]:
             for imp2 in table_ones[i+1]:
@@ -103,10 +101,8 @@ def binarr_str(binarr):
 def draw_PIs(table, minterms, dontcares = set()):
     th = '%-27s' % 'Prime Implecants'
     terms = minterms | dontcares
-    for minterm in minterms:
-        th += '| %-4s ' % minterm
-    for dontcare in dontcares:
-        th += '| %-4s ' % f'({dontcare})'
+    for term in terms:
+        th += '| %-4s ' % term if term in minterms else '| %-4s ' % f'({term})'
     print(th)
     
     for imp in table:
@@ -114,7 +110,6 @@ def draw_PIs(table, minterms, dontcares = set()):
         for term in terms:
             tr += '| %-4s ' % ('V' if term in imp.minterms else ' ')
         print(tr)
-
 
 def find_EPIs(table, minterms, dontcares = set()):
     minterm_count = {}
@@ -141,11 +136,47 @@ def find_EPIs(table, minterms, dontcares = set()):
     
     return EPIs
 
-def find_mincover(table, minterms, dontcares = set()):
-    pass
+def row_dominance(table, minterms):
+    minterm_set = set(minterms)
+    for imp in table:
+        imp.temp_minterms = imp.minterms & minterm_set
+    for i in range(len(table)):
+        if table[i].combined:
+            continue
+        for j in range(i+1, len(table)):
+            if table[j].combined:
+                continue
+            if table[i].temp_minterms.issubset(table[j].temp_minterms):
+                table[i].combined = True
+            elif table[j].temp_minterms.issubset(table[i].temp_minterms):
+                table[j].combined = True
+    return list(filter(lambda imp: not imp.combined, table))
+
+def column_dominance(table, minterms):
+    minterm_sets = dict()
+    lminterms = list(minterms)
+    for minterm in minterms:
+        minterm_sets[minterm] = [set(), False]
+    for imp in table:
+        for minterm in imp.minterms:
+            if minterm in minterms:
+                minterm_sets[minterm][0].add(imp.name)
+    for i in range(len(minterms)):
+        if minterm_sets[lminterms[i]][1]:
+            continue
+        for j in range(i+1, len(minterms)):
+            if minterm_sets[lminterms[j]][1]:
+                continue
+            if minterm_sets[lminterms[i]][0].issubset(minterm_sets[lminterms[j]][0]):
+                minterm_sets[lminterms[j]][1] = True
+            elif minterm_sets[lminterms[j]][0].issubset(minterm_sets[lminterms[i]][0]):
+                minterm_sets[lminterms[i]][1] = True
+    minterms_alive = set(filter(lambda minterm: not minterm_sets[minterm][1], minterm_sets))
+    return minterms_alive
 
 if __name__ == '__main__':
-    size, minterms, dontcares = get_data('input.txt')
+    size, minterms, dontcares = get_data(input('input file name: '))
+    result = []
     draw_line()
     print('step 0. 값 읽어오기')
     print(f'size : {size}')
@@ -153,30 +184,66 @@ if __name__ == '__main__':
     print(f'dontcares : {dontcares}')
 
     table = make_table(minterms, dontcares, size)
-    table_PI = make_PIs(table)
+    table = make_PIs(table)
 
     i = 1
-    for imp in table_PI:
+    for imp in table:
         imp.name = 'P'+str(i)
         i += 1
 
     draw_line()
-    print('step 1. PI 리스트 찾기')
-    print(list(map(lambda imp: imp.minterms, table_PI)))
+    print('step 1. PI 찾기')
+    print(list(map(lambda imp: imp.minterms, table)))
     draw_line()
     print('step 1-1. PI 테이블')
-    draw_PIs(table_PI, minterms, dontcares)
+    draw_PIs(table, minterms, dontcares)
 
-    EPIs = find_EPIs(table_PI, minterms, dontcares)
-    draw_line()
-    print('step 2. EPI 리스트 찾기')
-    print(list(map(lambda imp: imp.minterms, EPIs)))
-    draw_line()
-    print('step 2-1. EPI가 제거된 PI 테이블')
-    minterms_of_EPIs = set()
-    for EPI in EPIs:
-        minterms_of_EPIs.update(EPI.minterms)
-    table = list(filter(lambda imp:imp not in EPIs, table_PI))
-    minterms = set(filter(lambda m: m not in minterms_of_EPIs, minterms))
-    draw_PIs(table, minterms)
+    last_len = 0
+    origin_minterms = minterms
+    while last_len != len(table):
+        last_len = len(table)
+        EPIs = find_EPIs(table, minterms, dontcares)
+        draw_line()
+        print('step 2. EPI 찾기')
+        result.extend(EPIs)
+        print(*map(lambda imp: f'{imp.name}:{imp.minterms}', EPIs))
+        if len(EPIs) == len(table):
+            print("NEPI가 남아있지 않으므로 종료합니다.")
+            break
+        draw_line()
 
+        minterms_of_EPIs = set()
+        for EPI in EPIs:
+            minterms_of_EPIs.update(EPI.minterms)
+        table = list(filter(lambda imp:imp not in EPIs, table))
+        minterms = set(filter(lambda m: m not in minterms_of_EPIs, minterms))
+        if len(minterms) == 0:
+            print("모든 minterm이 커버되었으므로 종료합니다.")
+            break
+
+        print('step 2-1. EPI가 제거된 PI 테이블')
+        draw_PIs(table, minterms)
+        draw_line()
+
+        print('step 3. column dominance')
+        minterms = column_dominance(table, minterms)
+        print(f'column dominance 후 남은 minterms: {minterms}')
+        draw_PIs(table, minterms)
+        draw_line()
+        print('step 4. row dominance')
+        table = row_dominance(table, minterms)
+        draw_PIs(table, minterms)
+        draw_line()
+        print('step 5. 변화가 있다면 부분적으로 다시 시작합니다.')
+        print(f'이전 테이블 row 수: {last_len}, 현재 테이블 row 수: {len(table)}')
+    else:
+        draw_line()
+        print('변화가 없으므로 중단합니다.')
+        print('Patrick method는 구현되지 않았습니다.')
+        print('남은 PIs:')
+        draw_PIs(table, minterms)
+        print('남은 PIs(full):')
+        draw_PIs(table, origin_minterms)
+    draw_line()
+    print('산출된 EPIs:')
+    draw_PIs(sorted(result, key=lambda x:x.name), origin_minterms)

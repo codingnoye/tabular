@@ -1,0 +1,11 @@
+4 // 비트의 수
+! minterms // 이 아래에 minterm들 한 줄에 하나
+0
+4
+8
+10
+11
+12
+! don't care // 이 아래 don't care 항 한 줄에 하나
+13
+15
